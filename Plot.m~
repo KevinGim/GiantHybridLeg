@@ -1,0 +1,46 @@
+% Open File
+clc
+clear all
+close all
+
+formatSpec = '%d %d %d %d %d %d %d %d %d %d %d %d %d';
+sizeA = [13 inf];
+fileID = fopen('Data_Log.txt','r');
+A = fscanf(fileID, formatSpec, sizeA);
+data = A.';
+%% Find the end of recording point
+i = max(find(data(:,1)>0))
+
+%% Plot the Data
+dxl_constant = 180/501932;
+subplot(321)
+plot(data(1:i,1),data(1:i,2)*dxl_constant);
+hold on;
+plot(data(1:i,1),data(1:i,8)*dxl_constant,'--');
+
+axis([0 i -10 10])
+%%
+subplot(322)
+plot(data(1:i,1),data(1:i,3)*dxl_constant);
+hold on;
+plot(data(1:i,1),data(1:i,9)*dxl_constant,'--');
+%%
+subplot(323)
+plot(data(1:i,1),data(1:i,4)*dxl_constant);
+hold on;
+plot(data(1:i,1),data(1:i,10)*dxl_constant,'--');
+%%
+subplot(324)
+plot(data(1:i,1),data(1:i,5)*dxl_constant);
+hold on;
+plot(data(1:i,1),data(1:i,11)*dxl_constant,'--');
+%%
+subplot(325)
+plot(data(1:i,1),data(1:i,6)*dxl_constant);
+hold on;
+plot(data(1:i,1),data(1:i,12)*dxl_constant,'--');
+%%
+subplot(326)
+plot(data(1:i,1),data(1:i,7)*dxl_constant);
+hold on;
+plot(data(1:i,1),data(1:i,13)*dxl_constant,'--');
