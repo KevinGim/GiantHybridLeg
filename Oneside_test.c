@@ -22,6 +22,7 @@
 #define ADDR_Rtrndelay 9
 #define ADDR_Drive_Mode 11
 #define ADDR_Oper_Mode 11
+#define ADDR_PWM_LIMIT 36
 #define ADDR_CUR_LIMIT 38
 #define ADDR_VEL_LIMIT 44
 #define ADDR_TORQUE_EN 512
@@ -31,13 +32,16 @@
 #define ADDR_POS_D 528
 #define ADDR_POS_I 530
 #define ADDR_POS_P 532
+#define ADDR_POS_FF1 538
 #define ADDR_GOAL_VEL 552
 #define ADDR_PROFILE_ACCL 556
 #define ADDR_PROFILE_VEL 560
 #define ADDR_GOAL_POS 564
+#define ADDR_READ_PWM 572
 #define ADDR_READ_CUR 574
 #define ADDR_READ_VEL 576
 #define ADDR_READ_POS 580
+#define ADDR_SHUTDOWN 63
 
 // Data Byte Length
 #define LEN_GOAL_POS 4
@@ -58,6 +62,7 @@
 #define ADDR_INDDATA_READ_VEL (ADDR_INDDATA_READ_POS + LEN_READ_POS)
 #define ADDR_INDDATA_READ_CUR (ADDR_INDDATA_READ_VEL + LEN_READ_VEL)
 
+
 // Protocol version
 #define PROTOCOL_VERSION 2.0 // See which protocol version is used in the Dynamixel
 
@@ -75,16 +80,16 @@
 
 int main()
 {
-	int DXL_ID[5] = {1, 2, 3, 4, 5};
+	int DXL_ID[6] = {1, 2, 3, 4, 5, 6};
 	char input = 0;
 	int PROFILE_V = 40;
 	int PROFILE_A = 20;
 	int DXL_num = sizeof(DXL_ID) / sizeof(DXL_ID[0]);
 	long tick = 0;
 	long int *motor_angle;
-	float x = 0.0, y = 0.0, z = 0.0;
-	float x0 = 0.0, y0 = -1700.0, z0 = 0.0;
-	float roll = 0.0, pitch = 0.0, yaw = 0.0;
+	double x = 0.0, y = 0.0, z = 0.0;
+	double x0 = 0.0, y0 = -1810.0, z0 = 0.0;
+	double roll = 0.0, pitch = 0.0, yaw = 0.0;
 	int err[6] = {
 		0,
 	};
@@ -108,8 +113,18 @@ int main()
 	double t_elapsed = 0.0, t_init = 0.0, t_pause = 0.0, t_loop = 0.0;
 	uint64_t diff1, diff2;
 	struct timespec t0, t_start, t_end1, t_end2;
-	float t_loop1 = 0.0, t_loop2 = 0.0;
+	double t_loop1 = 0.0, t_loop2 = 0.0;
 	long t_sleep = 0;
+	double x_amp = 0.0;
+	double y_amp = 0.0;
+    double z_min = 10.0;
+    double z_height = 0.0;
+    double step_time = 0.0;
+    double tau = 0.0;
+    double duration = 0.0;
+    double t_lift_1 = 0.0;
+    double t_lift_2 = 0.0;
+	double period = 0.0;
 
 	// Initialize PortHandler Structs
 	// Set the port path
@@ -149,29 +164,33 @@ int main()
 	// Indirect address would not accessible when the torque is already enabled
 	write1(port_num, DXL_ID, DXL_num, ADDR_TORQUE_EN, TORQUE_DISABLE);
 	write1(port_num, DXL_ID, DXL_num, ADDR_Oper_Mode, POS_MODE); // Position Mode
-	write1(port_num, DXL_ID, DXL_num, ADDR_Rtrndelay, 2);		 // Return Delay Time = 100us
+	write1(port_num, DXL_ID, DXL_num, ADDR_Rtrndelay, 25);		 // Return Delay Time = 50us
 
 	// LIMIT
-	write2(port_num, DXL_ID, DXL_num, ADDR_CUR_LIMIT, 22000);
+	write2(port_num, DXL_ID, DXL_num, ADDR_CUR_LIMIT, 22740);
 	write4(port_num, DXL_ID, DXL_num, ADDR_VEL_LIMIT, 2900);
+	write1(port_num, DXL_ID, DXL_num, ADDR_SHUTDOWN, 26);
 
 	ind_addr(port_num, DXL_ID, DXL_num, ADDR_INDADDR_WRITE, ADDR_GOAL_POS, LEN_GOAL_POS);
 	ind_addr(port_num, DXL_ID, DXL_num, ADDR_INDADDR_READ_POS, ADDR_READ_POS, LEN_READ_POS);
 	ind_addr(port_num, DXL_ID, DXL_num, ADDR_INDADDR_READ_VEL, ADDR_READ_VEL, LEN_READ_VEL);
 	ind_addr(port_num, DXL_ID, DXL_num, ADDR_INDADDR_READ_CUR, ADDR_READ_CUR, LEN_READ_CUR);
-
+	
 	write1(port_num, DXL_ID, DXL_num, ADDR_TORQUE_EN, TORQUE_ENABLE);
 
 	// Set Profile Vel & Acc
-	PROFILE_V = 200; // Slow Down
-	PROFILE_A = 100; // Slow Down
+	PROFILE_V = 400; // Slow Down
+	PROFILE_A = 800; // Slow Down
 	write4(port_num, DXL_ID, DXL_num, ADDR_PROFILE_VEL, PROFILE_V);
 	write4(port_num, DXL_ID, DXL_num, ADDR_PROFILE_ACCL, PROFILE_A);
 
 	// PID GAIN
 	write2(port_num, DXL_ID, DXL_num, ADDR_POS_P, 8000);
 	write2(port_num, DXL_ID, DXL_num, ADDR_POS_D, 2000);
-	write2(port_num, DXL_ID, DXL_num, ADDR_POS_I, 500);
+	write2(port_num, DXL_ID, DXL_num, ADDR_POS_I, 1000);
+	write2(port_num, DXL_ID, DXL_num, ADDR_POS_FF1, 800);
+	
+
 
 	// Initialize XM430 Groupsyncwrite/read instance
 	int groupwrite_num = groupSyncWrite(port_num, PROTOCOL_VERSION, ADDR_INDDATA_WRITE, LEN_GOAL_POS);
@@ -182,32 +201,41 @@ int main()
 	// uint8_t dxl_getdata_result = False;
 	// uint8_t dxl_error = 0;
 
+	printf("Press any key to start\n");
+	getchar();
+
 	clock_gettime(CLOCK_MONOTONIC, &t0);
 
 	// While Loop
 	while (1)
 	{
-
 		clock_gettime(CLOCK_MONOTONIC, &t_start);
 
-		printf("Tick: %6ld  Loop: %2.3f ms  Elapsed Time: %4.2f s       ", tick, t_loop2, t_elapsed);
+		printf("Tick: %6ld    Loop: %2.3f ms    Elapsed Time: %4.2f s  ||  ", tick, t_loop2, t_elapsed);
 
 		input = getKey();
-
 		if ((input == ESC_ASCII_VALUE))
 		{
 			break;
 		}
 		///////////////////////////////////////////////////////// Motion ////////////////////////////////////////////////////////////////////////////
-		///////////////////////////////////////////////////////// Motion ////////////////////////////////////////////////////////////////////////////
-		///////////////////////////////////////////////////////// Motion ////////////////////////////////////////////////////////////////////////////
-		///////////////////////////////////////////////////////// Motion ////////////////////////////////////////////////////////////////////////////
-		///////////////////////////////////////////////////////// Motion ////////////////////////////////////////////////////////////////////////////
-		t_init = 5.0;
+		
+		t_init = 2.5;
 		t_pause = 0.05;
-		x0 = -100.0;
-		y0 = -1500.0;
-		z0 = 0.0;
+		
+		x_amp = 0.0;
+		y_amp = 800.0;
+        z_height = 300.0;
+        step_time = 2.0;
+        tau = 0.5;
+        duration = step_time * tau;
+        t_lift_1 = (step_time - duration)/2.0;
+        t_lift_2 = t_lift_1 + step_time;
+
+		x0 = 0.0;
+		y0 = 0.0;
+		z0 = -1600.0;
+
 		if (t_elapsed < t_init)
 		{
 			x = x0;
@@ -216,25 +244,45 @@ int main()
 		}
 		else if (t_init < t_elapsed && t_elapsed < t_init + t_pause)
 		{
-			PROFILE_V = 2900; 
-			PROFILE_A = 8000; 
+			PROFILE_V = 1000; 
+			PROFILE_A = 20000; 
 			write4(port_num, DXL_ID, DXL_num, ADDR_PROFILE_VEL, PROFILE_V);
 			write4(port_num, DXL_ID, DXL_num, ADDR_PROFILE_ACCL, PROFILE_A);
 			printf("motion Start");
 		}
 		else
 		{
-			x = x0 + 0.0 * sin(2 * PI * 0.4 * (t_elapsed - (t_init + t_pause)));
-			y = y0 + 0.0 * (1 - cos(2 * PI * 0.4 * (t_elapsed - (t_init + t_pause))));
-			z = z0 + 0.0 * sin(2 * PI * 0.4 * (t_elapsed - (t_init + t_pause)));
-		}
-		printf("x: %4.2f, y: %4.2f, z: %4.2f   ", x, y, z);
+  
+        // x = x0;
+       
+        // y = y0 - (y_amp/2.0 * sin(2.0*PI*(t_elapsed-(t_init + t_pause))/(2.0*step_time)));
+        
+        // int step_num = floor(t_elapsed/step_time);
+        // float time_cycle = fmod(t_elapsed-(t_init + t_pause), 2.0*step_time);
 
-		///////////////////////////////////////////////////////// Motion ////////////////////////////////////////////////////////////////////////////
-		///////////////////////////////////////////////////////// Motion ////////////////////////////////////////////////////////////////////////////
-		///////////////////////////////////////////////////////// Motion ////////////////////////////////////////////////////////////////////////////
-		///////////////////////////////////////////////////////// Motion ////////////////////////////////////////////////////////////////////////////
-		///////////////////////////////////////////////////////// Motion ////////////////////////////////////////////////////////////////////////////
+        // if ((time_cycle> t_lift_1) && (time_cycle < t_lift_1+duration)){
+        //     z = z0 + z_height/2.0*(1-cos(2.0*PI/(duration)*(time_cycle-t_lift_1)));
+        // }
+        // else{
+        //     z = z0;
+        // }
+			period = 3.0;
+			x = x0 - 600.0 * sin(2.0 * PI / period * tanh((t_elapsed - (t_init + t_pause))/10.0) * (t_elapsed - (t_init + t_pause)));
+			y = y0 + 0.0 * sin(2.0 * PI / period * tanh((t_elapsed - (t_init + t_pause))/10.0)  *(t_elapsed - (t_init + t_pause)));
+			z = z0 + 0.0 * (1-cos(2.0 * PI / period * tanh((t_elapsed - (t_init + t_pause))/10.0) * (t_elapsed - (t_init + t_pause))));
+		}
+
+
+		if (z > -1100.0){
+			z = -1100.0;
+		}
+		else if (z<-1810.0){
+			z = -1810.0;
+		}
+		printf("x: %4.1f, y: %4.1f, z: %4.1f   ||  ", x, y, z);
+
+		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 		motor_angle = IK(x, y, z, roll, pitch, yaw);
 
 		for (int i = 0; i < DXL_num; i++)
@@ -248,33 +296,33 @@ int main()
 		addparam_write(groupwrite_num, DXL_ID[2], motor_angle[2], LEN_GOAL_POS);
 		addparam_write(groupwrite_num, DXL_ID[3], motor_angle[3], LEN_GOAL_POS);
 		addparam_write(groupwrite_num, DXL_ID[4], motor_angle[4], LEN_GOAL_POS);
-		// addparam_write(groupwrite_num, DXL_ID[5], motor_angle[5], LEN_GOAL_POS);
+		addparam_write(groupwrite_num, DXL_ID[5], motor_angle[5], LEN_GOAL_POS);
 
 		// Syncwrite all
 		groupSyncWriteTxPacket(groupwrite_num);
 		groupSyncWriteClearParam(groupwrite_num);
 
-		// DXL read
-		// Syncread present position
-		groupSyncReadTxRxPacket(groupread_num);
+		// // DXL read
+		// // Syncread present position
+		// groupSyncReadTxRxPacket(groupread_num);
 
-		for (int i = 0; i < DXL_num; i++)
-		{
-			DXL_pos[tick][i] = groupSyncReadGetData(groupread_num, DXL_ID[i], ADDR_INDDATA_READ_POS, LEN_READ_POS);
-			DXL_vel[tick][i] = groupSyncReadGetData(groupread_num, DXL_ID[i], ADDR_INDDATA_READ_VEL, LEN_READ_VEL);
-			DXL_cur[tick][i] = groupSyncReadGetData(groupread_num, DXL_ID[i], ADDR_INDDATA_READ_CUR, LEN_READ_CUR);
-			if (DXL_cur[tick][i] > 32768)
-			{
-				DXL_cur[tick][i] = DXL_cur[tick][i] - 65536;
-			}
-		}
+		// for (int i = 0; i < DXL_num; i++)
+		// {
+		// 	DXL_pos[tick][i] = groupSyncReadGetData(groupread_num, DXL_ID[i], ADDR_INDDATA_READ_POS, LEN_READ_POS);
+		// 	DXL_vel[tick][i] = groupSyncReadGetData(groupread_num, DXL_ID[i], ADDR_INDDATA_READ_VEL, LEN_READ_VEL);
+		// 	DXL_cur[tick][i] = groupSyncReadGetData(groupread_num, DXL_ID[i], ADDR_INDDATA_READ_CUR, LEN_READ_CUR);
+		// 	if (DXL_cur[tick][i] > 32768)
+		// 	{
+		// 		DXL_cur[tick][i] = DXL_cur[tick][i] - 65536;
+		// 	}
+		// }
 
-		for (int i = 0; i < DXL_num; i++)
-		{
-			err[i] = (long int)motor_command[tick][i] - (long int)DXL_pos[tick][i];
-		}
+		// for (int i = 0; i < DXL_num; i++)
+		// {
+		// 	err[i] = (long int)motor_command[tick][i-1] - (long int)DXL_pos[tick][i];
+		// }
 
-		printf("err: DXL1: %6d   DXL2: %6d   DXL3: %6d   DXL4: %6d   DXL5: %6d   DXL6: %6d     ", err[0], err[1], err[2], err[3], err[4], err[5]);
+		// printf("Err       DXL1: %6d   DXL2: %6d   DXL3: %6d   DXL4: %6d   DXL5: %6d   DXL6: %6d     ", err[0], err[1], err[2], err[3], err[4], err[5]);
 		// printf("POS: DXL1: %6d   DXL2: %6d   DXL3: %6d   DXL4: %6d   DXL5: %6d   DXL6: %6d     ", motor_angle[0], motor_angle[1], motor_angle[2], motor_angle[3], motor_angle[4], motor_angle[5]);
 		// printf("POS: DXL1: %6d   DXL2: %6d   DXL3: %6d   DXL4: %6d   DXL5: %6d   DXL6: %6d     ", DXL_pos[tick][0], DXL_pos[tick][1], DXL_pos[tick][2], DXL_pos[tick][3], DXL_pos[tick][4], DXL_pos[tick][5]);
 		// printf("VEL: DXL1: %6d   DXL2: %6d   DXL3: %6d   DXL4: %6d   DXL5: %6d   DXL6: %6d     ", DXL_vel[tick][0], DXL_vel[tick][1], DXL_vel[tick][2], DXL_vel[tick][3], DXL_vel[tick][4], DXL_vel[tick][5]);
@@ -286,7 +334,7 @@ int main()
 		t_loop = 4000.0;
 		diff1 = MILLION * (t_end1.tv_sec - t_start.tv_sec) + (t_end1.tv_nsec - t_start.tv_nsec) / 1000; //usec
 		t_loop1 = diff1 * 1e-3;																			// msec
-		t_sleep = t_loop - (float)t_loop1 * 1000.0;														// Loop time == 2.50ms
+		t_sleep = t_loop - (double)t_loop1 * 1000.0;														// Loop time == 2.50ms
 
 		if (t_sleep > 0 && t_sleep < 50000)
 		{
