@@ -14,40 +14,158 @@
 * limitations under the License.
 *******************************************************************************/
 
-/* Author: Ryu Woon Jung (Leon) */
+////////////////////////////////////////////////////////////////////////////////
+/// @file The file for port control in Linux
+/// @author Zerom, Leon (RyuWoon Jung)
+////////////////////////////////////////////////////////////////////////////////
 
-#ifndef DYNAMIXEL_SDK_INCLUDE_DYNAMIXEL_SDK_LINUX_PORTHANDLERLINUX_C_H_
-#define DYNAMIXEL_SDK_INCLUDE_DYNAMIXEL_SDK_LINUX_PORTHANDLERLINUX_C_H_
+#ifndef DYNAMIXEL_SDK_INCLUDE_DYNAMIXEL_SDK_LINUX_PORTHANDLERLINUX_H_
+#define DYNAMIXEL_SDK_INCLUDE_DYNAMIXEL_SDK_LINUX_PORTHANDLERLINUX_H_
 
 
 #include "port_handler.h"
 
-int portHandlerLinux            (const char *port_name);
+namespace dynamixel
+{
 
-uint8_t setupPortLinux          (int port_num, const int cflag_baud);
-uint8_t setCustomBaudrateLinux  (int port_num, int speed);
-int     getCFlagBaud            (const int baudrate);
+////////////////////////////////////////////////////////////////////////////////
+/// @brief The class for control port in Linux
+////////////////////////////////////////////////////////////////////////////////
+class PortHandlerLinux : public PortHandler
+{
+ private:
+  int     socket_fd_;
+  int     baudrate_;
+  char    port_name_[100];
 
-double  getCurrentTimeLinux     ();
-double  getTimeSinceStartLinux  (int port_num);
+  double  packet_start_time_;
+  double  packet_timeout_;
+  double  tx_time_per_byte;
 
-uint8_t openPortLinux           (int port_num);
-void    closePortLinux          (int port_num);
-void    clearPortLinux          (int port_num);
+  bool    setupPort(const int cflag_baud);
+  bool    setCustomBaudrate(int speed);
+  int     getCFlagBaud(const int baudrate);
 
-void    setPortNameLinux        (int port_num, const char *port_name);
-char   *getPortNameLinux        (int port_num);
+  double  getCurrentTime();
+  double  getTimeSinceStart();
 
-uint8_t setBaudRateLinux        (int port_num, const int baudrate);
-int     getBaudRateLinux        (int port_num);
+ public:
+  ////////////////////////////////////////////////////////////////////////////////
+  /// @brief The function that initializes instance of PortHandler and gets port_name
+  /// @description The function initializes instance of PortHandler and gets port_name.
+  ////////////////////////////////////////////////////////////////////////////////
+  PortHandlerLinux(const char *port_name);
 
-int     getBytesAvailableLinux  (int port_num);
+  ////////////////////////////////////////////////////////////////////////////////
+  /// @brief The function that closes the port
+  /// @description The function calls PortHandlerLinux::closePort() to close the port.
+  ////////////////////////////////////////////////////////////////////////////////
+  virtual ~PortHandlerLinux() { closePort(); }
 
-int     readPortLinux           (int port_num, uint8_t *packet, int length);
-int     writePortLinux          (int port_num, uint8_t *packet, int length);
+  ////////////////////////////////////////////////////////////////////////////////
+  /// @brief The function that opens the port
+  /// @description The function calls PortHandlerLinux::setBaudRate() to open the port.
+  /// @return communication results which come from PortHandlerLinux::setBaudRate()
+  ////////////////////////////////////////////////////////////////////////////////
+  bool    openPort();
 
-void    setPacketTimeoutLinux     (int port_num, uint16_t packet_length);
-void    setPacketTimeoutMSecLinux (int port_num, double msec);
-uint8_t isPacketTimeoutLinux      (int port_num);
+  ////////////////////////////////////////////////////////////////////////////////
+  /// @brief The function that closes the port
+  /// @description The function closes the port.
+  ////////////////////////////////////////////////////////////////////////////////
+  void    closePort();
 
-#endif /* DYNAMIXEL_SDK_INCLUDE_DYNAMIXEL_SDK_LINUX_PORTHANDLERLINUX_C_H_ */
+  ////////////////////////////////////////////////////////////////////////////////
+  /// @brief The function that clears the port
+  /// @description The function clears the port.
+  ////////////////////////////////////////////////////////////////////////////////
+  void    clearPort();
+
+  ////////////////////////////////////////////////////////////////////////////////
+  /// @brief The function that sets port name into the port handler
+  /// @description The function sets port name into the port handler.
+  /// @param port_name Port name
+  ////////////////////////////////////////////////////////////////////////////////
+  void    setPortName(const char *port_name);
+
+  ////////////////////////////////////////////////////////////////////////////////
+  /// @brief The function that returns port name set into the port handler
+  /// @description The function returns current port name set into the port handler.
+  /// @return Port name
+  ////////////////////////////////////////////////////////////////////////////////
+  char   *getPortName();
+
+  ////////////////////////////////////////////////////////////////////////////////
+  /// @brief The function that sets baudrate into the port handler
+  /// @description The function sets baudrate into the port handler.
+  /// @param baudrate Baudrate
+  /// @return false
+  /// @return   when error was occurred during port opening
+  /// @return or true
+  ////////////////////////////////////////////////////////////////////////////////
+  bool    setBaudRate(const int baudrate);
+
+  ////////////////////////////////////////////////////////////////////////////////
+  /// @brief The function that returns current baudrate set into the port handler
+  /// @description The function returns current baudrate set into the port handler.
+  /// @return Baudrate
+  ////////////////////////////////////////////////////////////////////////////////
+  int     getBaudRate();
+
+  ////////////////////////////////////////////////////////////////////////////////
+  /// @brief The function that checks how much bytes are able to be read from the port buffer
+  /// @description The function checks how much bytes are able to be read from the port buffer
+  /// @description and returns the number.
+  /// @return Length of read-able bytes in the port buffer
+  ////////////////////////////////////////////////////////////////////////////////
+  int     getBytesAvailable();
+
+  ////////////////////////////////////////////////////////////////////////////////
+  /// @brief The function that reads bytes from the port buffer
+  /// @description The function gets bytes from the port buffer,
+  /// @description and returns a number of bytes read.
+  /// @param packet Buffer for the packet received
+  /// @param length Length of the buffer for read
+  /// @return -1
+  /// @return   when error was occurred
+  /// @return or Length of bytes read
+  ////////////////////////////////////////////////////////////////////////////////
+  int     readPort(uint8_t *packet, int length);
+
+  ////////////////////////////////////////////////////////////////////////////////
+  /// @brief The function that writes bytes on the port buffer
+  /// @description The function writes bytes on the port buffer,
+  /// @description and returns a number of bytes which are successfully written.
+  /// @param packet Buffer which would be written on the port buffer
+  /// @param length Length of the buffer for write
+  /// @return -1
+  /// @return   when error was occurred
+  /// @return or Length of bytes written
+  ////////////////////////////////////////////////////////////////////////////////
+  int     writePort(uint8_t *packet, int length);
+
+  ////////////////////////////////////////////////////////////////////////////////
+  /// @brief The function that sets and starts stopwatch for watching packet timeout
+  /// @description The function sets the stopwatch by getting current time and the time of packet timeout with packet_length.
+  /// @param packet_length Length of the packet expected to be received
+  ////////////////////////////////////////////////////////////////////////////////
+  void    setPacketTimeout(uint16_t packet_length);
+
+  ////////////////////////////////////////////////////////////////////////////////
+  /// @brief The function that sets and starts stopwatch for watching packet timeout
+  /// @description The function sets the stopwatch by getting current time and the time of packet timeout with msec.
+  /// @param packet_length Length of the packet expected to be received
+  ////////////////////////////////////////////////////////////////////////////////
+  void    setPacketTimeout(double msec);
+
+  ////////////////////////////////////////////////////////////////////////////////
+  /// @brief The function that checks whether packet timeout is occurred
+  /// @description The function checks whether current time is passed by the time of packet timeout from the time set by PortHandlerLinux::setPacketTimeout().
+  ////////////////////////////////////////////////////////////////////////////////
+  bool    isPacketTimeout();
+};
+
+}
+
+
+#endif /* DYNAMIXEL_SDK_INCLUDE_DYNAMIXEL_SDK_LINUX_PORTHANDLERLINUX_H_ */

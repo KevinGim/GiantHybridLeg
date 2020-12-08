@@ -32,8 +32,8 @@ DIR_OBJS   = ./.objects
 # compiler options
 CC          = gcc
 CX          = g++
-CCFLAGS     = -O2 -O3 -DLINUX -D_GNU_SOURCE -Wall $(INCLUDES) $(FORMAT) -g
-CXFLAGS     = -O2 -O3 -DLINUX -D_GNU_SOURCE -Wall $(INCLUDES) $(FORMAT) -g
+CCFLAGS     = -O2 -O3 -DLINUX -D_GNU_SOURCE -Wall -w $(INCLUDES) $(FORMAT) -g
+CXFLAGS     = -O2 -O3 -DLINUX -D_GNU_SOURCE -Wall -w $(INCLUDES) $(FORMAT) -g
 LNKCC       = $(CX)
 LNKFLAGS    = $(CXFLAGS) #-Wl,-rpath,$(DIR_THOR)/lib
 FORMAT      = -m64
@@ -42,13 +42,13 @@ FORMAT      = -m64
 # Core components (all of these are likely going to be needed)
 #---------------------------------------------------------------------
 INCLUDES   += -I$(DIR_DXL)/include/ 
-LIBRARIES  += -ldxl_x64_c 
+LIBRARIES  += -ldxl_x64_cpp 
 LIBRARIES  += -lrt 
 
 #---------------------------------------------------------------------
 # Files
 #---------------------------------------------------------------------
-SOURCES = Oneside_test.c, dxl_driver.c, Kinematics.c
+SOURCES = Oneside_test.cpp, Kinematics.cpp\
     # *** OTHER SOURCES GO HERE ***
 
 OBJECTS  = $(addsuffix .o,$(addprefix $(DIR_OBJS)/,$(basename $(notdir $(SOURCES))))) 
